@@ -28,11 +28,12 @@ class Team:
 
 
 class Game:
-    def __init__(self, game_id, date):
+    def __init__(self, game_id, date, home_win):
         self.game_id = game_id
         self.date = date
         self.home_team = None
         self.away_team = None
+        self.home_win = home_win
 
     def __repr__(self):
         return f"Game(ID: {self.game_id}, Date: {self.date}, Home: {self.home_team.team_name}, Away: {self.away_team.team_name})"
@@ -75,8 +76,8 @@ def process_game_data(row_list):
         if not game or game.game_id != row[3]:
             if game:
                 games.append(game)
-            game = Game(row[3], datetime.strptime(row[4], "%Y-%m-%d %H:%M:%S"))
-
+            game = Game(row[3], datetime.strptime(row[4], "%Y-%m-%d %H:%M:%S"), row[8] > row[9])
+        
         if row[6] == 1:
             if(game.home_team is None):
                 game.home_team = Team(row[5])
@@ -94,7 +95,7 @@ def get_playoff_games(season_start_year):
     # Use SQL functions to extract the year from the gameDate field
     # Get playoff games for a specific year
     query = f"""
-    SELECT p.firstName, p.lastName, p.personId, p.gameId, p.gameDate, p.playerTeamName, p.home, p.numMinutes
+    SELECT p.firstName, p.lastName, p.personId, p.gameId, p.gameDate, p.playerTeamName, p.home, p.numMinutes, g.homeScore, g.awayScore
     FROM games g LEFT JOIN PlayerStatistics p ON g.gameId = p.gameId 
     WHERE strftime('%Y', g.gameDate) = '{season_start_year + 1}' AND g.gameType = 'Playoffs'
     AND p.numMinutes IS NOT NULL AND p.numMinutes > 0
@@ -108,7 +109,7 @@ def get_playoff_games(season_start_year):
 def get_regular_season_games(season_start_year):
     # Get regular season games from September of the start year to May of the next year
     query = f"""
-    SELECT p.firstName, p.lastName, p.personId, p.gameId, p.gameDate, p.playerTeamName, p.home, p.numMinutes
+    SELECT p.firstName, p.lastName, p.personId, p.gameId, p.gameDate, p.playerTeamName, p.home, p.numMinutes, g.homeScore, g.awayScore
     FROM games g LEFT JOIN PlayerStatistics p ON g.gameId = p.gameId 
     WHERE g.gameDate BETWEEN '{season_start_year}-09-01' AND '{int(season_start_year) + 1}-05-31' 
     AND g.gameType = 'Regular Season'

@@ -2,7 +2,7 @@ from trueskill import Rating, rate, setup
 import numpy as np
 
 # Set up TrueSkill environment with draw support
-env = setup(draw_probability=0.2)  # 20% draw rate assumed
+env = setup(draw_probability=0)  # no draws! doing minute weighted game results
 
 # Weighted average of player ratings (Gaussian sums)
 def weighted_team_rating(players, weights):
