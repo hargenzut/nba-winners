@@ -1,9 +1,11 @@
+from numpy import average
 import pandas as pd
-from ts_ratings import weighted_update
+from ts_ratings import weighted_update, weighted_team_rating
 from trueskill import Rating
 
 def generate_ts_ratings(games_list, game_df_update_callback=None):
     rating_dictionary = dict()
+
     for game in games_list:
 
         if game_df_update_callback:
@@ -60,7 +62,16 @@ def generate_ts_ratings_pregame(games_list):
 
 
 def compute_team_rating(ratings_dict, team):
-    pass
+    team_ratings = []
+    team_mins = []
+
+    for player in team.players:
+        if player.player_id in ratings_dict:
+            team_ratings.append(ratings_dict[player.player_id][0])
+            team_mins.append(average(ratings_dict[player.player_id][1]))
+
+    return weighted_team_rating(team_ratings, team_mins)
+
 
 def generate_rs_ratings(games_list):
     pass

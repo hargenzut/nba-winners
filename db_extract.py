@@ -119,20 +119,48 @@ def get_regular_season_games(season_start_year):
     
     cursor.execute(query)
     return process_game_data(cursor.fetchall())
-    # return cursor.fetchall()
 
+# this is not foolproof, but it is good enough for this project- theoretically misses players with looooong injuries that come back late in the playoffs
+# also misses players that stay on the roster but don't play the whole end of the season... which is fine, since we don't care about anyone who plays zero
+# playoff mins anyway.  In any case, the dataset doesn't have structure for this so we're doing it this way
+def get_season_end_rosters(season_start_year):
+    # Get all players and their teams
+    query = f"""
+    SELECT fname, lname, id, team
+    FROM (
+        SELECT p.firstName fname, p.lastName lname, p.personId id, p.playerTeamName team, 
+               ROW_NUMBER() OVER (PARTITION BY p.personId ORDER BY p.gameDate DESC) as row_num
+        FROM PlayerStatistics p
+        where p.gameDate BETWEEN '{int(season_start_year) + 1}-01-01' AND '{int(season_start_year) + 1}-05-31'
+    ) subquery
+    WHERE row_num = 1
+    """
+    
+    cursor.execute(query)
+    player_teams_list = cursor.fetchall()
+
+    teams_dict = dict()
+
+    for player in player_teams_list:
+        if player[3] not in teams_dict:
+            teams_dict[player[3]] = []
+
+        teams_dict[player[3]].push(player.id)
+
+    return teams_dict
 
 if __name__ == "__main__":
     init_db()
-    year = input("Enter the year to fetch playoff games: ")
+    get_season_end_rosters(2024)
+    # year = input("Enter the year to fetch playoff games: ")
     
-    rs_games = get_regular_season_games(year)
-    for game in rs_games:
-        print(game.home_team.team_name, game.away_team.team_name)
-        for player in game.home_team.players:
-            print(player)
-        for player in game.away_team.players:
-            print(player)
+    # rs_games = get_regular_season_games(year)
+    # for game in rs_games:
+    #     print(game.home_team.team_name, game.away_team.team_name)
+    #     for player in game.home_team.players:
+    #         print(player)
+    #     for player in game.away_team.players:
+    #         print(player)
     
     
     
