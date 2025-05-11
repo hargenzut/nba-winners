@@ -135,23 +135,59 @@ def get_season_end_rosters(season_start_year):
     ) subquery
     WHERE row_num = 1
     """
-    
     cursor.execute(query)
-    player_teams_list = cursor.fetchall()
 
     teams_dict = dict()
-
-    for player in player_teams_list:
+    for player in cursor.fetchall():
         if player[3] not in teams_dict:
-            teams_dict[player[3]] = []
+            teams_dict[player[3]] = Team(player[3])
 
-        teams_dict[player[3]].push(player.id)
+        teams_dict[player[3]].add_player(Player(player[2], player[0], player[1], 0))
 
-    return teams_dict
+    return [team for _, team in teams_dict.items()]
 
+def get_playoff_game_metadata(season_start_year):
+
+    # TODO: still not gonna work.  since home and away go back and forth, the window function for the score is all messed up.
+    # perhaps need a CTE that sets team1 and team2 statically regardless of home/away, and then do a window function on that
+
+    # Get playoff game metadata
+    query = f"""
+    WITH fixed_team_pos_games AS (
+        SELECT 
+        gameId, gameDate, seriesGameNumber,
+        CASE WHEN hometeamName > awayteamName THEN hometeamName ELSE awayteamName END AS team_a_name,
+        CASE WHEN hometeamName > awayteamName THEN awayteamName ELSE hometeamName END AS team_b_name,
+        CASE WHEN (homeScore > awayScore AND hometeamName > awayteamName) OR (awayScore > homeScore AND hometeamName < awayteamName) THEN 1 ELSE 0 END AS team_a_win
+        FROM games
+        WHERE gameType = 'Playoffs' AND strftime('%Y', gameDate) = '{season_start_year + 1}'
+    ),
+    series_data AS (
+        SELECT
+        gameId, gameDate, seriesGameNumber, team_a_name, team_b_name,
+        COALESCE(SUM(team_a_win) OVER series, 0) AS team_a_series_wins,
+        COALESCE(SUM(CASE WHEN NOT team_a_win THEN 1 ELSE 0 END) OVER series, 0) AS team_b_series_wins
+        FROM fixed_team_pos_games
+        WINDOW series AS (
+            PARTITION BY team_a_name, team_b_name
+            ORDER BY seriesGameNumber ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        )
+    )
+    SELECT
+        gameId, gameDate, team_a_name, team_b_name, seriesGameNumber,
+        team_a_series_wins, team_b_series_wins, team_a_series_wins - team_b_series_wins AS series_diff
+    FROM series_data;
+    """
+    
+    cursor.execute(query)
+    return cursor.fetchall()
+    
 if __name__ == "__main__":
     init_db()
-    get_season_end_rosters(2024)
+    games = get_playoff_game_metadata(2024)
+    for game in games:
+        print(game)
     # year = input("Enter the year to fetch playoff games: ")
     
     # rs_games = get_regular_season_games(year)
