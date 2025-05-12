@@ -4,8 +4,7 @@ from ts_ratings import weighted_update, weighted_team_rating
 from db_extract import get_season_end_rosters, get_regular_season_games, get_playoff_games
 from trueskill import Rating
 
-def generate_ts_ratings(games_list, game_df_update_callback=None):
-    rating_dictionary = dict()
+def generate_ts_ratings(games_list, rating_dictionary = dict(), game_df_update_callback=None):
 
     for game in games_list:
 
@@ -44,7 +43,7 @@ def generate_ts_ratings(games_list, game_df_update_callback=None):
         # return dictionary
         return rating_dictionary
 
-def generate_ts_ratings_pregame(games_list):
+def generate_ts_ratings_pregame(games_list, prefix_ratings_dict=dict()):
     
     pregame_ratings_df = pd.DataFrame(columns=["game_date", "home_team_name", "away_team_name", "home_team_rating", "home_team_rating_var", "away_team_rating", "away_team_rating_var"])
 
@@ -61,7 +60,7 @@ def generate_ts_ratings_pregame(games_list):
             "away_team_rating_var": away_team_rating_var
         }
 
-    return pregame_ratings_df, generate_ts_ratings(games_list, game_df_update_callback=df_update_callback)
+    return pregame_ratings_df, generate_ts_ratings(games_list, prefix_ratings_dict, game_df_update_callback=df_update_callback)
 
 
 def compute_team_rating(ratings_dict, team):
@@ -117,13 +116,19 @@ def generate_rs_rating_period(season_range):
 def generate_po_pregame_ratings(season_range, prefix_seasons_size):
     start_season, end_season = season_range
 
+    prefix_po_games = []
+    for season_year in range(start_season - prefix_seasons_size, start_season):
+        prefix_po_games = prefix_po_games + get_playoff_games(season_year)
+
+    prefix_ratings_dict = generate_ts_ratings(prefix_po_games)
+
     po_ratings_df = pd.DataFrame(columns=["season_year", "game_date", "home_team_name", "away_team_name", "home_team_rating", "home_team_rating_var", "away_team_rating", "away_team_rating_var"]) 
     for season_year in range(start_season, end_season + 1):
         # Get the games and rosters for the current season
         games_list = get_playoff_games(season_year)
 
         # Generate ratings for the current season
-        pregame_ratings_df, _ = generate_ts_ratings_pregame(games_list)
+        pregame_ratings_df, prefix_ratings_dict = generate_ts_ratings_pregame(games_list, prefix_ratings_dict)
 
         # add to the period dataframe
         for i, row in pregame_ratings_df.iterrows():
