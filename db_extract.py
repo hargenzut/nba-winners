@@ -147,10 +147,6 @@ def get_season_end_rosters(season_start_year):
     return [team for _, team in teams_dict.items()]
 
 def get_playoff_game_metadata(season_start_year):
-
-    # TODO: still not gonna work.  since home and away go back and forth, the window function for the score is all messed up.
-    # perhaps need a CTE that sets team1 and team2 statically regardless of home/away, and then do a window function on that
-
     # Get playoff game metadata
     query = f"""
     WITH fixed_team_pos_games AS (
@@ -158,13 +154,14 @@ def get_playoff_game_metadata(season_start_year):
         gameId, gameDate, seriesGameNumber,
         CASE WHEN hometeamName > awayteamName THEN hometeamName ELSE awayteamName END AS team_a_name,
         CASE WHEN hometeamName > awayteamName THEN awayteamName ELSE hometeamName END AS team_b_name,
+        CASE WHEN hometeamName > awayteamName THEN 1 ELSE 0 END AS team_a_home,
         CASE WHEN (homeScore > awayScore AND hometeamName > awayteamName) OR (awayScore > homeScore AND hometeamName < awayteamName) THEN 1 ELSE 0 END AS team_a_win
         FROM games
         WHERE gameType = 'Playoffs' AND strftime('%Y', gameDate) = '{season_start_year + 1}'
     ),
     series_data AS (
         SELECT
-        gameId, gameDate, seriesGameNumber, team_a_name, team_b_name,
+        gameId, gameDate, seriesGameNumber, team_a_name, team_b_name, team_a_home,
         COALESCE(SUM(team_a_win) OVER series, 0) AS team_a_series_wins,
         COALESCE(SUM(CASE WHEN NOT team_a_win THEN 1 ELSE 0 END) OVER series, 0) AS team_b_series_wins
         FROM fixed_team_pos_games
@@ -175,13 +172,22 @@ def get_playoff_game_metadata(season_start_year):
         )
     )
     SELECT
-        gameId, gameDate, team_a_name, team_b_name, seriesGameNumber,
-        team_a_series_wins, team_b_series_wins, team_a_series_wins - team_b_series_wins AS series_diff
+        gameId, gameDate, team_a_name, team_b_name, team_a_home, seriesGameNumber,
+        team_a_series_wins, team_b_series_wins, team_a_series_wins - team_b_series_wins AS series_diff,
+        {season_start_year} AS season_start_year
     FROM series_data;
     """
     
     cursor.execute(query)
     return cursor.fetchall()
+
+def get_playoff_game_metadata_range(season_start_year_range):
+    start_season_year, end_season_year = season_start_year_range
+    all_games = []
+    for season_year in range(start_season_year, end_season_year + 1):
+        games = get_playoff_game_metadata(season_year)
+        all_games.extend(games)
+    return all_games
     
 if __name__ == "__main__":
     init_db()

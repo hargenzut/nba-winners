@@ -50,14 +50,17 @@ def generate_ts_ratings_pregame(games_list, prefix_ratings_dict=dict()):
     def df_update_callback(game, rating_dict):
         home_team_rating, home_team_rating_var = compute_team_rating(rating_dict, game.home_team)
         away_team_rating, away_team_rating_var = compute_team_rating(rating_dict, game.away_team)
+
+        team_a_is_home = game.home_team.name > game.away_team.name
         pregame_ratings_df.loc[len(pregame_ratings_df)] = {
+            "game_id": game.game_id,
             "game_date": game.date,
-            "home_team_name": game.home_team.name,
-            "away_team_name": game.away_team.name,
-            "home_team_rating": home_team_rating,
-            "home_team_rating_var": home_team_rating_var,
-            "away_team_rating": away_team_rating,
-            "away_team_rating_var": away_team_rating_var
+            "team_a_name": game.home_team.name if team_a_is_home else game.away_team.name,
+            "team_b_name": game.away_team.name if team_a_is_home else game.home_team.name,
+            "team_a_po_rating": home_team_rating if team_a_is_home else away_team_rating,
+            "team_a_po_rating_var": home_team_rating_var if team_a_is_home else away_team_rating_var,
+            "team_b_po_rating": away_team_rating if team_a_is_home else home_team_rating,
+            "team_b_po_rating_var": away_team_rating_var if team_a_is_home else home_team_rating_var
         }
 
     return pregame_ratings_df, generate_ts_ratings(games_list, prefix_ratings_dict, game_df_update_callback=df_update_callback)
@@ -122,7 +125,7 @@ def generate_po_pregame_ratings(season_range, prefix_seasons_size):
 
     prefix_ratings_dict = generate_ts_ratings(prefix_po_games)
 
-    po_ratings_df = pd.DataFrame(columns=["season_year", "game_date", "home_team_name", "away_team_name", "home_team_rating", "home_team_rating_var", "away_team_rating", "away_team_rating_var"]) 
+    po_ratings_df = pd.DataFrame(columns=["season_year", "game_date", "game_id", "team_a_name", "team_b_name", "team_a_po_rating", "team_a_po_rating_var", "team_b_po_rating", "team_b_po_rating_var"]) 
     for season_year in range(start_season, end_season + 1):
         # Get the games and rosters for the current season
         games_list = get_playoff_games(season_year)
@@ -134,13 +137,14 @@ def generate_po_pregame_ratings(season_range, prefix_seasons_size):
         for i, row in pregame_ratings_df.iterrows():
             po_ratings_df.loc[len(po_ratings_df)] = {
                 "season_year": season_year,
+                "game_id": row["game_id"],
                 "game_date": row["game_date"],
-                "home_team_name": row["home_team_name"],
-                "away_team_name": row["away_team_name"],
-                "home_team_rating": row["home_team_rating"],
-                "home_team_rating_var": row["home_team_rating_var"],
-                "away_team_rating": row["away_team_rating"],
-                "away_team_rating_var": row["away_team_rating_var"]
+                "team_a_name": row["team_a_name"],
+                "team_b_name": row["team_b_name"],
+                "team_a_po_rating": row["team_a_po_rating"],
+                "team_a_po_rating_var": row["team_a_po_rating_var"],
+                "team_b_po_rating": row["team_b_po_rating"],
+                "team_b_po_rating_var": row["team_b_po_rating_var"]
             }
 
     return po_ratings_df
