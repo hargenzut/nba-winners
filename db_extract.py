@@ -163,7 +163,8 @@ def get_playoff_game_metadata(season_start_year):
         SELECT
         gameId, gameDate, seriesGameNumber, team_a_name, team_b_name, team_a_home,
         COALESCE(SUM(team_a_win) OVER series, 0) AS team_a_series_wins,
-        COALESCE(SUM(CASE WHEN NOT team_a_win THEN 1 ELSE 0 END) OVER series, 0) AS team_b_series_wins
+        COALESCE(SUM(CASE WHEN NOT team_a_win THEN 1 ELSE 0 END) OVER series, 0) AS team_b_series_wins,
+        team_a_win
         FROM fixed_team_pos_games
         WINDOW series AS (
             PARTITION BY team_a_name, team_b_name
@@ -174,7 +175,8 @@ def get_playoff_game_metadata(season_start_year):
     SELECT
         gameId, gameDate, team_a_name, team_b_name, team_a_home, seriesGameNumber,
         team_a_series_wins, team_b_series_wins, team_a_series_wins - team_b_series_wins AS series_diff,
-        {season_start_year} AS season_start_year
+        {season_start_year} AS season_start_year,
+        team_a_win
     FROM series_data;
     """
     
