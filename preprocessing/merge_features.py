@@ -52,11 +52,11 @@ def extract_features(season_start_year_range = (2009, 2024), playoff_rating_pref
     po_game_metadata_df = po_game_metadata_df.drop(columns=["team_name_x", "team_name_y"])
     print("done")
     print(po_game_metadata_df.head())
-    features_df.to_csv(output_dir + "playoff_features.csv", index=False)
+    po_game_metadata_df.to_csv(output_dir + "playoff_features.csv", index=False)
 
-def load_data():
+def load_data(output_dir="output/"):
     # Load the data from the CSV file
-    features_df = pd.read_csv("playoff_features.csv")
+    features_df = pd.read_csv(output_dir + "playoff_features.csv")
     return features_df
 
 # call once for up to date data.  In an operational setting we would update incrementally with a service/job, but not necessary for this scale
@@ -82,14 +82,5 @@ if __name__ == "__main__":
     # Update the features
     print("Updating features csv...", end="", flush=True)
     extract_features()
-    print("done")
-
-    # Load the data
-    print("Loading features csv...", end="", flush=True)
-    features_df = load_data()
-    print("done")
-
-    # Display the first few rows of the DataFrame
-    print("Features DataFrame:")
-    print(features_df.head())
+    print("done updating features csv.")
 
