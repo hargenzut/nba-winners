@@ -19,7 +19,7 @@ def generate_ts_ratings(games_list, rating_dictionary = dict(), game_df_update_c
                 rating_dictionary[player.player_id] = (Rating(), [])
             
             home_ratings.append(rating_dictionary[player.player_id][0])
-            home_mins.append(player.mins)
+            home_mins.append(player.minutes)
             
         away_ratings = []
         away_mins = []
@@ -28,35 +28,33 @@ def generate_ts_ratings(games_list, rating_dictionary = dict(), game_df_update_c
                 rating_dictionary[player.player_id] = (Rating(), [])
             
             away_ratings.append(rating_dictionary[player.player_id][0])
-            away_mins.append(player.mins)
+            away_mins.append(player.minutes)
 
         # call our rating function, get updated ratings for all players with mins
         new_home_ratings, new_away_ratings = weighted_update(home_ratings, away_ratings, home_mins, away_mins, winner=1 if game.home_win else 2)
 
         # update the dictionary with the new ratings
         for i, player in enumerate(game.home_team.players):
-            rating_dictionary[player.player_id] = (new_home_ratings[i], rating_dictionary[player.player_id][1] + [player.mins])
+            rating_dictionary[player.player_id] = (new_home_ratings[i], rating_dictionary[player.player_id][1] + [player.minutes])
 
         for i, player in enumerate(game.away_team.players):
-            rating_dictionary[player.player_id] = (new_away_ratings[i], rating_dictionary[player.player_id][1] + [player.mins])
+            rating_dictionary[player.player_id] = (new_away_ratings[i], rating_dictionary[player.player_id][1] + [player.minutes])
 
-        # return dictionary
-        return rating_dictionary
+    # return dictionary
+    return rating_dictionary
 
-def generate_ts_ratings_pregame(games_list, prefix_ratings_dict=dict()):
-    
-    pregame_ratings_df = pd.DataFrame(columns=["game_date", "home_team_name", "away_team_name", "home_team_rating", "home_team_rating_var", "away_team_rating", "away_team_rating_var"])
+def generate_ts_ratings_pregame(games_list, prefix_ratings_dict=dict()):    
+    pregame_ratings_df = pd.DataFrame(columns=["game_id", "team_a_name", "team_b_name", "team_a_po_rating", "team_a_po_rating_var", "team_b_po_rating", "team_b_po_rating_var"])
 
     def df_update_callback(game, rating_dict):
         home_team_rating, home_team_rating_var = compute_team_rating(rating_dict, game.home_team)
         away_team_rating, away_team_rating_var = compute_team_rating(rating_dict, game.away_team)
 
-        team_a_is_home = game.home_team.name > game.away_team.name
+        team_a_is_home = game.home_team.team_name > game.away_team.team_name
         pregame_ratings_df.loc[len(pregame_ratings_df)] = {
             "game_id": game.game_id,
-            "game_date": game.date,
-            "team_a_name": game.home_team.name if team_a_is_home else game.away_team.name,
-            "team_b_name": game.away_team.name if team_a_is_home else game.home_team.name,
+            "team_a_name": game.home_team.team_name if team_a_is_home else game.away_team.team_name,
+            "team_b_name": game.away_team.team_name if team_a_is_home else game.home_team.team_name,
             "team_a_po_rating": home_team_rating if team_a_is_home else away_team_rating,
             "team_a_po_rating_var": home_team_rating_var if team_a_is_home else away_team_rating_var,
             "team_b_po_rating": away_team_rating if team_a_is_home else home_team_rating,
@@ -67,16 +65,32 @@ def generate_ts_ratings_pregame(games_list, prefix_ratings_dict=dict()):
 
 
 def compute_team_rating(ratings_dict, team):
+    
+    # default here handled below
+    # # if no players, return default rating
+    # if len(team.players) == 0:
+    #     rating_default = Rating()
+    #     return rating_default.mu, rating_default.sigma ** 2
+    
+    # otherwise...
     team_ratings = []
     team_mins = []
-
     for player in team.players:
         if player.player_id in ratings_dict:
             team_ratings.append(ratings_dict[player.player_id][0])
             team_mins.append(average(ratings_dict[player.player_id][1]))
 
-    return weighted_team_rating(team_ratings, team_mins)
+    # if our total average mins for everyone on the roster is below 240 (total person-min for a game), add a "default" player to our list with
+    # a default rating and the remaining mins
+    # this accounts for a roster where we only know about low-mins players, or don't have data on anyone
+    if sum(team_mins) < 240:
+        default_player = Rating()
+        team_ratings.append(default_player)
+        team_mins.append(240 - sum(team_mins))
 
+    # normalize mins (weights)
+    team_mins = [x / 240 for x in team_mins]
+    return weighted_team_rating(team_ratings, team_mins)
 
 def generate_rs_ratings(games_list, roster_list):
     ratings_dict = generate_ts_ratings(games_list)
@@ -96,8 +110,11 @@ def generate_rs_ratings(games_list, roster_list):
 def generate_rs_rating_period(season_range):
     start_season, end_season = season_range
 
-    rs_ratings_period_df = pd.DataFrame(columns=["season_year", "team_name", "rating_mean", "rating_var"])
+    rs_ratings_period_df = pd.DataFrame(columns=["season_start_year", "team_name", "rating_mean", "rating_var"])
     for season_year in range(start_season, end_season + 1):
+
+        print("Calculating regular season ratings for: ", season_year, "... ", end="", flush=True)
+
         # Get the games and rosters for the current season
         games_list = get_regular_season_games(season_year)
         roster_list = get_season_end_rosters(season_year)
@@ -108,11 +125,13 @@ def generate_rs_rating_period(season_range):
         # add to the period dataframe
         for i, row in ratings_df.iterrows():
             rs_ratings_period_df.loc[len(rs_ratings_period_df)] = {
-                "season_year": season_year,
+                "season_start_year": season_year,
                 "team_name": row["team_name"],
                 "rating_mean": row["rating_mean"],
                 "rating_var": row["rating_var"]
             }
+
+        print("Done")
 
     return rs_ratings_period_df
 
@@ -121,24 +140,30 @@ def generate_po_pregame_ratings(season_range, prefix_seasons_size):
 
     prefix_po_games = []
     for season_year in range(start_season - prefix_seasons_size, start_season):
+        print("Getting prefix playoff games for: ", season_year, "... ", end="", flush=True)
         prefix_po_games = prefix_po_games + get_playoff_games(season_year)
+        print("Done")
 
+    print("Generating prefix ratings for playoff games...", end="", flush=True)
     prefix_ratings_dict = generate_ts_ratings(prefix_po_games)
+    print("Done")
 
-    po_ratings_df = pd.DataFrame(columns=["season_year", "game_date", "game_id", "team_a_name", "team_b_name", "team_a_po_rating", "team_a_po_rating_var", "team_b_po_rating", "team_b_po_rating_var"]) 
+    po_ratings_df = pd.DataFrame(columns=["season_start_year", "game_id", "team_a_name", "team_b_name", "team_a_po_rating", "team_a_po_rating_var", "team_b_po_rating", "team_b_po_rating_var"]) 
     for season_year in range(start_season, end_season + 1):
+        
+        print("Getting prefix ratings for: ", season_year, "... ", end="", flush=True)
+        
         # Get the games and rosters for the current season
         games_list = get_playoff_games(season_year)
 
         # Generate ratings for the current season
         pregame_ratings_df, prefix_ratings_dict = generate_ts_ratings_pregame(games_list, prefix_ratings_dict)
 
-        # add to the period dataframe
+        # add to the period dataframe'
         for i, row in pregame_ratings_df.iterrows():
             po_ratings_df.loc[len(po_ratings_df)] = {
-                "season_year": season_year,
+                "season_start_year": season_year,
                 "game_id": row["game_id"],
-                "game_date": row["game_date"],
                 "team_a_name": row["team_a_name"],
                 "team_b_name": row["team_b_name"],
                 "team_a_po_rating": row["team_a_po_rating"],
@@ -146,5 +171,7 @@ def generate_po_pregame_ratings(season_range, prefix_seasons_size):
                 "team_b_po_rating": row["team_b_po_rating"],
                 "team_b_po_rating_var": row["team_b_po_rating_var"]
             }
+
+        print("Done")
 
     return po_ratings_df

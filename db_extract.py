@@ -39,7 +39,7 @@ class Game:
         return f"Game(ID: {self.game_id}, Date: {self.date}, Home: {self.home_team.team_name}, Away: {self.away_team.team_name})"
 
 
-db_path, connection, cursor = "nba_data.db", None, None
+db_path, connection, cursor = "output/nba_data.db", None, None
 
 def init_db():
     global connection, cursor
@@ -65,7 +65,6 @@ def update_db_source():
         df.to_sql(table_name, conn, if_exists="replace", index=False)
 
     conn.close()
-
 
     init_db()
 
@@ -186,9 +185,12 @@ def get_playoff_game_metadata(season_start_year):
 def get_playoff_game_metadata_range(season_start_year_range):
     start_season_year, end_season_year = season_start_year_range
     all_games = []
+
     for season_year in range(start_season_year, end_season_year + 1):
+        print("Processing Season year: ", season_year, "... ", end="", flush=True)
         games = get_playoff_game_metadata(season_year)
         all_games.extend(games)
+        print("Done")
     return all_games
     
 if __name__ == "__main__":
